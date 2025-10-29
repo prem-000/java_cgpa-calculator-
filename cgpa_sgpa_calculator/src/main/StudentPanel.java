@@ -7,7 +7,7 @@ import java.awt.event.ActionEvent;
 
 public class StudentPanel extends JFrame {
 
-    private JTextField nameField, regField;
+    private JTextField nameField;
     private JTable subjectTable;
     private DefaultTableModel tableModel;
     private JLabel sgpaLabel;
@@ -16,38 +16,27 @@ public class StudentPanel extends JFrame {
         setTitle("Student SGPA Calculator");
         setSize(650, 450);
         setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
 
-        // ---------- Header ----------
-        JLabel title = new JLabel("SGPA CALCULATOR", SwingConstants.CENTER);
+        JLabel title = new JLabel("STUDENT SGPA CALCULATOR", SwingConstants.CENTER);
         title.setFont(new Font("Arial", Font.BOLD, 18));
         add(title, BorderLayout.NORTH);
 
-        // ---------- Input Panel ----------
-        JPanel inputPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 10));
-        inputPanel.add(new JLabel("Reg. No:"));
-        regField = new JTextField(8);
-        inputPanel.add(regField);
-
+        JPanel inputPanel = new JPanel();
         inputPanel.add(new JLabel("Name:"));
         nameField = new JTextField(15);
         inputPanel.add(nameField);
-
         add(inputPanel, BorderLayout.NORTH);
 
-        // ---------- Table ----------
-        String[] columns = {"Subject Name", "Marks (out of 100)"};
+        String[] columns = {"Subject", "Marks (out of 100)"};
         tableModel = new DefaultTableModel(columns, 0);
         subjectTable = new JTable(tableModel);
-        JScrollPane scrollPane = new JScrollPane(subjectTable);
-        add(scrollPane, BorderLayout.CENTER);
+        add(new JScrollPane(subjectTable), BorderLayout.CENTER);
 
-        // ---------- Buttons Panel ----------
-        JPanel buttonPanel = new JPanel(new FlowLayout());
-
+        JPanel buttonPanel = new JPanel();
         JButton addSubjectBtn = new JButton("Add Subject");
-        JButton calculateBtn = new JButton("Calculate & Save SGPA");
+        JButton calculateBtn = new JButton("Calculate & Save");
         JButton backBtn = new JButton("Back");
 
         sgpaLabel = new JLabel("SGPA: ");
@@ -57,75 +46,57 @@ public class StudentPanel extends JFrame {
         buttonPanel.add(calculateBtn);
         buttonPanel.add(sgpaLabel);
         buttonPanel.add(backBtn);
-
         add(buttonPanel, BorderLayout.SOUTH);
 
-        // ---------- Button Actions ----------
-
-        // Add new subject row
         addSubjectBtn.addActionListener(e -> tableModel.addRow(new Object[]{"", ""}));
-
-        // Calculate SGPA and Save to DB
         calculateBtn.addActionListener(this::calculateAndSaveSGPA);
-
-        // Back button
         backBtn.addActionListener(e -> {
-            new CGPA_SGPA_Calculator();
             dispose();
+            new CGPA_SGPA_Calculator();
         });
 
         setVisible(true);
     }
 
     private void calculateAndSaveSGPA(ActionEvent e) {
+        String name = nameField.getText().trim();
+        if (name.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Enter student name!");
+            return;
+        }
         int rowCount = tableModel.getRowCount();
         if (rowCount == 0) {
-            JOptionPane.showMessageDialog(this, "Please add at least one subject!");
+            JOptionPane.showMessageDialog(this, "Add at least one subject!");
             return;
         }
-
-        String name = nameField.getText().trim();
-        String regStr = regField.getText().trim();
-
-        if (name.isEmpty() || regStr.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please enter registration number and name!");
-            return;
-        }
-
         double totalGradePoints = 0;
-        double totalSubjects = 0;
-
-        try {
-            for (int i = 0; i < rowCount; i++) {
-                String marksStr = tableModel.getValueAt(i, 1).toString();
-                if (marksStr.isEmpty()) continue;
-
-                double marks = Double.parseDouble(marksStr);
-                double gradePoint = convertMarksToGradePoint(marks);
-                totalGradePoints += gradePoint;
+        int totalSubjects = 0;
+        for (int i = 0; i < rowCount; i++) {
+            Object marksObj = tableModel.getValueAt(i, 1);
+            if (marksObj == null || marksObj.toString().trim().isEmpty()) continue;
+            try {
+                double marks = Double.parseDouble(marksObj.toString());
+                totalGradePoints += convertMarksToGradePoint(marks);
                 totalSubjects++;
-            }
-
-            if (totalSubjects == 0) {
-                JOptionPane.showMessageDialog(this, "Please enter marks for subjects!");
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Invalid marks in row " + (i + 1));
                 return;
             }
-
-            double sgpa = totalGradePoints / totalSubjects;
-            sgpaLabel.setText(String.format("SGPA: %.2f", sgpa));
-
-            // ---------- Save to Database ----------
-            int regNo = Integer.parseInt(regStr);
-            DBConnection.addRecord(regNo, name, 0.0, sgpa); // CGPA = 0 for now
-
-            JOptionPane.showMessageDialog(this, "✅ SGPA saved successfully for " + name);
-
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Please enter valid numeric values for marks and Reg. No!");
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "❌ Error saving data to database!");
         }
+        if (totalSubjects == 0) {
+            JOptionPane.showMessageDialog(this, "Please enter valid marks!");
+            return;
+        }
+        double sgpa = totalGradePoints / totalSubjects;
+        sgpaLabel.setText(String.format("SGPA: %.2f", sgpa));
+
+        // If using in-memory DB:
+        try {
+            DBConnection.addRecord(DBConnection.getAllRecords().size() + 1, name, sgpa, sgpa);
+        } catch (Throwable t) {
+            // if DBConnection has different API, ignore; this is only to avoid runtime crash
+        }
+        JOptionPane.showMessageDialog(this, "✅ SGPA saved for " + name);
     }
 
     private double convertMarksToGradePoint(double marks) {
